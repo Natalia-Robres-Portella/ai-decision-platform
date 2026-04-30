@@ -21,14 +21,14 @@ import structlog
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from app.db.session import AsyncSessionLocal
 from app.evaluation.evaluator import (
     evaluate_completeness,
     evaluate_faithfulness,
     evaluate_relevance,
 )
-from app.services.retrieval_service import retrieve_with_filter
 from app.services.qa_service import answer_question
-from app.db.session import AsyncSessionLocal
+from app.services.retrieval_service import retrieve_with_filter
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["evaluation"])
