@@ -2,7 +2,7 @@
 
 A RAG (Retrieval-Augmented Generation) system that ingests PDF documents and answers questions with grounded, cited responses. Built with FastAPI, React, Qdrant, and PostgreSQL.
 
-> For the product story, architecture decisions, and interview preparation, see **[PRODUCT.md](PRODUCT.md)**.
+> For the product story, architecture decisions, see **[PRODUCT.md](PRODUCT.md)**.
 
 ---
 
