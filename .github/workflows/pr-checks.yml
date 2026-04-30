@@ -1,0 +1,74 @@
+name: PR Checks
+
+# Runs only on pull requests — adds a checklist comment so reviewers know
+# exactly what was verified before they approve.
+#
+# This workflow is intentionally separate from ci.yml:
+# - ci.yml owns the pass/fail signal (blocks merge if red)
+# - pr-checks.yml owns the communication layer (informs reviewers)
+#
+# Separation makes it easy to update the checklist without touching the
+# test logic, and vice versa.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Required for the workflow to post comments on PRs.
+permissions:
+  pull-requests: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Post a checklist comment on every new/updated PR.
+  #
+  # Why use find-or-create-comment?
+  # On each push to the PR branch, we want to UPDATE the existing comment
+  # rather than spam a new one. The `comment-author: github-actions[bot]`
+  # filter finds our own previous comment and updates it in place.
+  # ---------------------------------------------------------------------------
+  pr-comment:
+    name: Post PR checklist
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find existing PR comment
+        uses: peter-evans/find-comment@v3
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: "github-actions[bot]"
+          body-includes: "<!-- ci-checklist -->"
+
+      - name: Create or update PR checklist comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          edit-mode: replace
+          body: |
+            <!-- ci-checklist -->
+            ## CI Status for `${{ github.head_ref }}`
+
+            Triggered by commit `${{ github.event.pull_request.head.sha }}` — [view run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            ### Automated checks
+            | Check | Job | What it validates |
+            |-------|-----|-------------------|
+            | `lint` | Lint (Python + TypeScript) | ruff clean, ESLint clean, Prettier formatted |
+            | `test-backend` | Backend tests | 30 tests pass, ≥80% coverage |
+            | `test-frontend` | Frontend tests + build | TypeScript compiles, Vite build succeeds |
+
+            > All three jobs run in parallel. The PR is blocked from merging until all are green.
+
+            ### Reviewer checklist
+            Before approving, please verify:
+            - [ ] The code change matches what the PR description says it does
+            - [ ] Any new public function has a clear name (no comment needed to understand it)
+            - [ ] New tests cover the behaviour being added, not just the happy path
+            - [ ] No secrets, credentials, or real API keys in the diff
+            - [ ] Architecture decisions that affect other parts of the system are noted in the PR description
+
+            ---
+            *This comment is updated automatically on every push to this branch.*

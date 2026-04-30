@@ -1,0 +1,202 @@
+name: CI
+
+# Triggers: every push to main and every pull request targeting main.
+# Jobs run in parallel by default — lint, test-backend, and test-frontend
+# all start at the same time. A PR is blocked from merging if any job fails.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # JOB 1: Lint — Python (ruff) + TypeScript (ESLint + Prettier)
+  #
+  # Why lint in CI?
+  # A linter is a reviewer that never sleeps. It catches style inconsistencies,
+  # unused imports, and obvious bugs before they reach human review. Running it
+  # in CI means the main branch is always lint-clean, so diffs are about logic,
+  # not formatting.
+  #
+  # Why ruff instead of flake8/pylint?
+  # ruff is 10-100x faster (written in Rust). It replaces flake8, isort, and
+  # parts of pylint in a single tool, with zero-config defaults that work well
+  # for most Python projects.
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint (Python + TypeScript)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Python lint ---
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install ruff==0.8.6
+
+      - name: ruff check (lint rules)
+        run: ruff check backend/app backend/tests
+        # Fails on: unused imports, undefined names, import order violations
+
+      - name: ruff format --check (formatting)
+        run: ruff format --check backend/app backend/tests
+        # Fails if code doesn't match ruff's black-compatible format.
+        # Run `ruff format backend/` locally to auto-fix.
+
+      # --- TypeScript lint ---
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: ESLint
+        run: npm run lint
+        working-directory: frontend
+
+      - name: Prettier format check
+        run: npm run format:check
+        working-directory: frontend
+
+  # ---------------------------------------------------------------------------
+  # JOB 2: Backend tests
+  #
+  # Why Python 3.11 in CI when we develop on 3.14?
+  # 3.11 is the current LTS (Long-Term Support) Python — the version most
+  # production deployments use. Testing on 3.11 catches compatibility issues
+  # before they reach prod. If tests only pass on 3.14, they'll break when
+  # deployed to any standard cloud environment.
+  #
+  # Why include Postgres + Qdrant as services if tests mock them?
+  # Our current test suite mocks all external services. The services are here
+  # so future integration tests (that hit real Postgres/Qdrant) work without
+  # changing the CI config. The "contract test" pattern: mock in unit tests,
+  # real services in integration tests.
+  #
+  # Why aiosqlite for unit tests instead of the Postgres service?
+  # SQLite in-memory is instant (no network, no auth). It lets us test ORM
+  # queries in milliseconds. The Postgres service is there for when we add
+  # migration tests (alembic upgrade head) that must use the real dialect.
+  # ---------------------------------------------------------------------------
+  test-backend:
+    name: Backend tests (Python 3.11)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: ai_decision_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      qdrant:
+        image: qdrant/qdrant:v1.11.0
+        ports:
+          - 6333:6333
+        options: >-
+          --health-cmd "curl -f http://localhost:6333/readyz || exit 1"
+          --health-interval 15s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Tests mock OpenAI calls, so any non-empty value works here.
+      # In a real project with integration tests that call OpenAI, use a real
+      # test key stored as a GitHub secret.
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-test-placeholder' }}
+
+      # These match the service definitions above (standard port 5432 in CI,
+      # not 5434 — that remap is only needed locally to avoid port conflicts).
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ai_decision_db
+
+      QDRANT_HOST: localhost
+      QDRANT_PORT: 6333
+      COLLECTION_NAME: documents
+      DEBUG: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements-dev.txt
+          # pip cache: only re-downloads packages when requirements-dev.txt changes.
+          # Saves ~30s on most CI runs.
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+        working-directory: backend
+
+      - name: Run tests with coverage
+        run: pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing -v
+        working-directory: backend
+
+      - name: Upload coverage to Codecov
+        # Codecov is free for public repos. It tracks coverage trends over time
+        # and comments on PRs showing which lines a PR added/removed coverage for.
+        # Setup: go to codecov.io → connect your GitHub repo → add CODECOV_TOKEN
+        # as a GitHub secret (Settings → Secrets → Actions).
+        uses: codecov/codecov-action@v4
+        with:
+          file: backend/coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false  # don't fail CI if Codecov is down
+
+  # ---------------------------------------------------------------------------
+  # JOB 3: Frontend tests + build
+  #
+  # Why run `npm run build` in CI?
+  # TypeScript type errors don't surface at runtime — they're caught at build
+  # time. A broken build means nobody can deploy. The test runner (vitest)
+  # doesn't run tsc, so tests can pass while the build fails. Both must pass.
+  #
+  # The --passWithNoTests flag allows this job to succeed before any frontend
+  # tests are written. Remove it once you have real tests.
+  # ---------------------------------------------------------------------------
+  test-frontend:
+    name: Frontend tests + build (Node 20)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Run tests
+        run: npx vitest run --passWithNoTests
+        working-directory: frontend
+
+      - name: Build (TypeScript compile + Vite bundle)
+        run: npm run build
+        working-directory: frontend
