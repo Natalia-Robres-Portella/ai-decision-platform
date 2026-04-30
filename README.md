@@ -1,6 +1,8 @@
 # AI Decision Intelligence Platform
 
-A system that helps users make strategic business decisions by analyzing documents, news, and financial reports using RAG + LLM.
+A RAG (Retrieval-Augmented Generation) system that ingests PDF documents and answers questions with grounded, cited responses. Built with FastAPI, React, Qdrant, and PostgreSQL.
+
+> For the product story, architecture decisions, and interview preparation, see **[PRODUCT.md](PRODUCT.md)**.
 
 ---
 
@@ -8,25 +10,79 @@ A system that helps users make strategic business decisions by analyzing documen
 
 ```bash
 # 1. Start infrastructure (Postgres + Qdrant)
-cp .env.example .env
+cp .env.example .env          # fill in OPENAI_API_KEY
 docker compose up -d
 
-# 2. Run the backend
+# 2. Backend
 cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --port 8002 --reload
 
-# 3. Run the frontend
+# 3. Frontend (separate terminal)
 cd frontend
 npm install
 npm run dev
 ```
 
-Health check: http://localhost:8002/api/v1/health  
-API docs: http://localhost:8002/docs  
-Frontend: http://localhost:3000
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3001 |
+| API docs | http://localhost:8002/docs |
+| Health check | http://localhost:8002/api/v1/health |
+| Qdrant dashboard | http://localhost:6333/dashboard |
 
-> **Note on ports**: port 8000 is used by other Docker containers on this machine. We use 8002 for the backend and 5434 for PostgreSQL (5432 and 5433 are also taken).
+> **Port note:** Backend on 8002, Postgres on 5434, frontend on 3001 — all non-default to avoid conflicts with other local projects.
+
+---
+
+## What's Built
+
+### Backend — FastAPI + Python 3.11
+
+| Route | Description |
+|-------|-------------|
+| `POST /api/v1/documents/ingest` | Upload a PDF → chunk → embed → store in Qdrant |
+| `GET  /api/v1/documents` | List all ingested documents with status |
+| `POST /api/v1/ask` | Non-streaming question answering |
+| `POST /api/v1/ask/stream` | SSE streaming — tokens arrive in real time |
+| `GET  /api/v1/history` | Past question/answer pairs from PostgreSQL |
+| `POST /api/v1/eval/run` | Run the full evaluation suite (10 questions, 4 metrics) |
+| `GET  /api/v1/health` | Liveness + dependency status |
+
+**RAG pipeline:**
+1. `pypdf` extracts text page by page (preserving page numbers for citations)
+2. `tiktoken` (cl100k_base) chunks text into 512-token windows with 50-token overlap
+3. OpenAI `text-embedding-3-small` produces 1536-dimension vectors
+4. Vectors upserted to Qdrant collection (`cosine` distance)
+5. At query time: embed question → ANN search (top-5, score threshold 0.45) → build context block → `gpt-4o-mini` (temp=0.2) → stream tokens via SSE
+
+### Frontend — React 18 + TypeScript + Tailwind
+
+| Page | Route | Description |
+|------|-------|-------------|
+| Documents | `/ingest` | Drag-and-drop upload, real-time progress bar, document table with status badges |
+| Chat | `/chat` | Conversation interface, document filter, streaming responses, collapsible citations |
+| Evaluation | `/eval` | Evaluation dashboard with summary cards and per-question metric table |
+
+**State management:**
+- **React Query** — server state (documents, history). Auto-polls while any document is `processing`.
+- **Zustand** — client state (selected document IDs for scoped queries, chat message history).
+
+### Evaluation Framework
+
+Automated quality measurement using GPT-4o-mini as a judge:
+
+| Metric | What it measures | Score |
+|--------|-----------------|-------|
+| **Faithfulness** | % of answer sentences grounded in retrieved context (hallucination detector) | 0–100% |
+| **Relevance** | Quality of retrieved chunks for the question | 1–5 |
+| **Completeness** | Whether the answer addresses all aspects of the question | 1–5 |
+| **Latency** | Retrieval ms + total ms | milliseconds |
+
+```bash
+cd backend
+make eval         # runs 10 test questions, prints coloured table, saves JSON report
+```
 
 ---
 
@@ -34,126 +90,102 @@ Frontend: http://localhost:3000
 
 ```
 ai-decision-platform/
-├── backend/            # Python + FastAPI
+├── backend/
 │   ├── app/
-│   │   ├── main.py         # App factory + middleware
-│   │   ├── config.py       # Typed settings from env vars
+│   │   ├── main.py                  # App factory, lifespan (DB + Qdrant init)
+│   │   ├── config.py                # pydantic-settings — typed env vars
 │   │   ├── api/
-│   │   │   ├── routes/     # HTTP handlers only
-│   │   │   └── dependencies.py  # FastAPI DI providers
-│   │   ├── services/       # Business logic
-│   │   ├── repositories/   # Data access (DB + vector store)
-│   │   ├── models/         # Pydantic schemas (request/response)
-│   │   └── db/             # SQLAlchemy engine + session factory
-│   └── tests/
-├── frontend/           # React + TypeScript + Tailwind
+│   │   │   ├── routes/
+│   │   │   │   ├── ingestion.py     # POST /documents/ingest, GET /documents
+│   │   │   │   ├── qa.py            # POST /ask, POST /ask/stream
+│   │   │   │   ├── retrieval.py     # POST /retrieve (debug endpoint)
+│   │   │   │   ├── eval.py          # POST /eval/run
+│   │   │   │   └── health.py        # GET /health
+│   │   │   └── dependencies.py      # FastAPI DI: get_db()
+│   │   ├── services/
+│   │   │   ├── ingestion_service.py # load_pdf → chunk → embed_and_store
+│   │   │   ├── retrieval_service.py # embed_query → Qdrant ANN search
+│   │   │   └── qa_service.py        # retrieve → prompt → GPT → SSE stream
+│   │   ├── evaluation/
+│   │   │   └── evaluator.py         # faithfulness / relevance / completeness
+│   │   ├── repositories/
+│   │   │   └── history_repository.py
+│   │   ├── db/
+│   │   │   ├── models.py            # SQLAlchemy ORM models
+│   │   │   ├── base.py
+│   │   │   └── session.py           # AsyncSessionLocal, engine
+│   │   └── schemas/                 # Pydantic request/response models
+│   ├── evaluation/
+│   │   ├── test_dataset.json        # 10 test questions (3 documents)
+│   │   └── run_eval.py              # CLI runner (calls POST /eval/run)
+│   ├── tests/
+│   │   ├── unit/                    # pytest + aiosqlite (no real DB needed)
+│   │   └── integration/
+│   ├── Makefile
+│   └── pyproject.toml               # ruff config (line-length=100, E/F/I)
+│
+├── frontend/
 │   └── src/
-│       ├── components/     # Reusable UI components
-│       ├── pages/          # Route-level page components
-│       ├── services/       # API call functions
-│       └── types/          # Shared TypeScript interfaces
+│       ├── components/
+│       │   ├── chat/
+│       │   │   ├── MessageList.tsx  # Conversation bubbles + SSE state
+│       │   │   ├── MessageInput.tsx # Auto-growing textarea, Enter=send
+│       │   │   └── DocumentFilter.tsx  # Collapsible scope selector
+│       │   ├── DocumentUploader.tsx # 6-state upload machine
+│       │   ├── DocumentList.tsx     # Table with polling + skeleton rows
+│       │   ├── ConfidenceBadge.tsx
+│       │   └── SourceCard.tsx
+│       ├── hooks/
+│       │   └── useStreamAnswer.ts   # fetch + ReadableStream SSE consumer
+│       ├── pages/
+│       │   ├── ChatPage.tsx
+│       │   ├── IngestPage.tsx
+│       │   └── EvalPage.tsx
+│       ├── services/api.ts          # All HTTP calls via axios
+│       ├── store/chatStore.ts       # Zustand: selectedDocIds + messages
+│       └── types/index.ts           # TypeScript mirrors of Pydantic schemas
+│
 ├── infra/
-│   └── postgres/
-│       └── init.sql        # DB bootstrap (extensions, not tables)
-└── docker-compose.yml  # Local dev infrastructure
+│   └── postgres/init.sql
+├── docker-compose.yml               # Postgres + Qdrant (not the app)
+└── .github/workflows/ci.yml         # 3 parallel jobs
 ```
 
 ---
 
 ## Architecture Decisions
 
-### 1. Monorepo layout (`/backend`, `/frontend`, `/infra`)
+### 1. Layered backend: routes → services → repositories
 
-Keeping everything in one repo makes it easy to:
-- Run the full system with a single `docker compose up`
-- Share type contracts between layers (in the future, via OpenAPI codegen)
-- Coordinate changes that span backend + frontend in one PR
+Each layer has one responsibility and knows nothing about the layers above it:
 
-The tradeoff: as the project grows, a monorepo requires discipline to keep concerns separated. Tools like `nx` or `turborepo` help at scale, but we don't need them yet.
+| Layer | Knows | Does not know |
+|-------|-------|---------------|
+| Routes | HTTP (parsing, status codes) | Business logic, SQL |
+| Services | Business rules, orchestration | HTTP, database drivers |
+| Repositories | SQL / Qdrant queries | Business logic, HTTP |
 
-### 2. Layered backend architecture: routes → services → repositories
+This makes each layer independently testable. Switching Qdrant to Pinecone means touching one file.
 
-Each layer has exactly one responsibility:
+### 2. Async throughout
 
-| Layer | Knows about | Doesn't know about |
-|-------|-------------|-------------------|
-| **Routes** | HTTP (request parsing, status codes, auth headers) | Database, business rules |
-| **Services** | Business logic, orchestration, domain rules | HTTP, SQL |
-| **Repositories** | SQL / vector store queries | Business logic, HTTP |
+FastAPI is async-native. The backend uses `asyncpg` + `sqlalchemy[asyncio]` so database queries don't block the event loop. `asyncio.gather()` parallelises Qdrant and PostgreSQL calls where possible. In the evaluation route, questions run 3-at-a-time via a semaphore.
 
-**Why this matters**: you can test each layer in isolation. A service test doesn't need an HTTP client. A route test doesn't need a real database. When you switch from Qdrant to Pinecone, only the repository changes.
+### 3. SSE streaming via `fetch` (not `EventSource`)
 
-### 3. `pydantic-settings` for configuration
+The browser's built-in `EventSource` only supports GET. The streaming endpoint is POST (question in the body). Solution: `fetch` + `response.body.getReader()` + manual SSE line parsing. 30 lines, no library, handles incomplete chunks via line buffering.
 
-`app/config.py` defines a `Settings` class that reads from environment variables (and a `.env` file locally). Benefits:
-- **Type safety**: `POSTGRES_PORT` is an `int`, not a string
-- **Validation at startup**: the app crashes early with a clear error if a required env var is missing
-- **One source of truth**: no scattered `os.getenv()` calls
+### 4. React Query for server state, Zustand for client state
 
-The `settings` singleton is imported wherever needed. This is simpler than a dependency-injected config for most projects.
+React Query handles anything that lives on the server and can become stale (documents list, query history). It auto-polls while any document has `status === "processing"` and invalidates the cache after an upload. Zustand handles client-only UI state (which documents are selected for scoped queries, chat message history). Components subscribe to only the slices they need — no context re-render storms.
 
-### 4. Async SQLAlchemy with `asyncpg`
+### 5. LLM-as-judge evaluation (no ground truth required)
 
-FastAPI is async-first. Using `asyncpg` (the async PostgreSQL driver) with `sqlalchemy[asyncio]` means DB queries don't block the event loop — the server can handle other requests while waiting for the database. The sync alternative (`psycopg2`) would bottleneck under concurrent load.
+Reference-based metrics (BLEU, ROUGE) require human-annotated reference answers — expensive to build. GPT-4o-mini judges semantic meaning directly. One call per metric per question, structured output via `response_format: json_object`. The faithfulness check splits the answer into sentences and verifies each one against the retrieved context — this is the hallucination detector.
 
-`expire_on_commit=False` is set on the session factory to avoid SQLAlchemy trying to lazily reload attributes after a commit, which would fail in an async context.
+### 6. Docker Compose for infrastructure only
 
-### 5. DB session as a FastAPI dependency
-
-`get_db()` in `api/dependencies.py` is an async generator that:
-1. Opens a session
-2. Yields it to the route handler
-3. Commits on success, rolls back on exception
-
-This means every request gets its own isolated transaction automatically. Routes and services never call `session.commit()` directly — the dependency manages the lifecycle.
-
-### 6. Health check design
-
-The `/api/v1/health` endpoint checks each infrastructure dependency (Postgres, Qdrant) independently and reports a `status` per component:
-- `"ok"` — all components healthy
-- `"degraded"` — some components failing, others working
-- `"error"` — everything down
-
-**Why**: a binary healthy/unhealthy check doesn't give enough signal for debugging. With `"degraded"`, a load balancer can still route traffic while an engineer investigates a non-critical component.
-
-### 7. Vite dev proxy for the frontend
-
-In `vite.config.ts`, requests to `/api/*` are proxied to `http://localhost:8000`. This means:
-- The browser sees everything on `http://localhost:3000` — no CORS issues during development
-- The production build just needs an nginx reverse proxy doing the same routing
-- No hardcoded backend URLs in frontend code
-
-### 8. Docker Compose for local infrastructure only
-
-`docker-compose.yml` runs Postgres and Qdrant, but **not** the backend or frontend. The app processes run natively (`uvicorn`, `vite`) so you get:
-- Hot reload without rebuilding Docker images
-- Readable tracebacks directly in the terminal
-- Faster iteration during development
-
-The Dockerfiles exist for production deployment, not local dev.
-
-### 9. Why Qdrant as the vector store?
-
-| Option | Hosting | Notes |
-|--------|---------|-------|
-| **Qdrant** | Self-hosted (Docker) | Open source, no API key needed locally, fast |
-| Pinecone | Managed SaaS | Easier ops, but requires account + costs money |
-| pgvector | PostgreSQL extension | One less service, but less feature-rich |
-
-Qdrant is the right choice for local learning: zero cost, full control, and it's a production-grade system used in real applications.
-
----
-
-## What's Next
-
-| Step | What we'll build |
-|------|-----------------|
-| **Step 2** | SQLAlchemy models + Alembic migrations |
-| **Step 3** | Document upload endpoint (PDF, text) |
-| **Step 4** | LlamaIndex RAG pipeline + OpenAI embeddings |
-| **Step 5** | Qdrant vector indexing + similarity search |
-| **Step 6** | Query endpoint with LLM-generated answers |
-| **Step 7** | Frontend: upload UI + chat interface |
+Postgres and Qdrant run in Docker. The backend and frontend run natively (`uvicorn`, `vite`). This gives hot-reload without rebuilding images, readable tracebacks in the terminal, and faster iteration. The Dockerfiles exist for production deployment.
 
 ---
 
@@ -162,100 +194,55 @@ Qdrant is the right choice for local learning: zero cost, full control, and it's
 ```bash
 # Backend
 cd backend
-make test          # run all tests
-make test-unit     # unit tests only (fast)
-make test-cov      # tests + coverage report (must stay ≥ 80%)
+make test           # all tests
+make test-unit      # fast unit tests only
+make test-cov       # tests + coverage (must stay ≥ 80%)
+make eval           # RAG evaluation suite (backend must be running)
 
-# Lint before committing
-ruff check backend/app backend/tests   # lint
-ruff format backend/                   # auto-format
+# Backend linting
+ruff check app/ tests/
+ruff format app/ tests/
 
 # Frontend
 cd frontend
-npm test           # vitest (watch mode)
-npm run lint       # ESLint
-npm run format     # auto-format with Prettier
-npm run build      # TypeScript + Vite build (catches type errors)
+npm test            # vitest
+npm run build       # tsc + vite build (catches type errors)
+npm run lint        # ESLint
 ```
 
 ---
 
 ## CI Pipeline
 
-Every pull request and push to `main` runs three parallel GitHub Actions jobs:
+Three parallel GitHub Actions jobs run on every push and PR:
 
-| Job | What it checks |
-|-----|----------------|
+| Job | Checks |
+|-----|--------|
 | **lint** | `ruff check` + `ruff format --check` (Python), ESLint + Prettier (TypeScript) |
-| **test-backend** | 30 pytest tests, ≥80% coverage, uploaded to Codecov |
+| **test-backend** | pytest with Postgres + Qdrant services, coverage ≥ 80% |
 | **test-frontend** | `vitest run`, `tsc && vite build` |
 
-All three must be green before a PR can be merged.
-
-### One-time GitHub setup (do this when you create the repo)
-
-**1. Add GitHub Secrets** (Settings → Secrets and variables → Actions → New repository secret):
-
-| Secret name | Value |
-|---|---|
-| `OPENAI_API_KEY` | Your OpenAI key (tests mock it, but good practice to have it) |
-| `CODECOV_TOKEN` | From [codecov.io](https://codecov.io) after connecting the repo |
-
-**2. Enable branch protection on `main`** (Settings → Branches → Add rule):
-
-```
-Branch name pattern: main
-
-✅ Require a pull request before merging
-   ✅ Require approvals: 1
-   ✅ Dismiss stale pull request approvals when new commits are pushed
-
-✅ Require status checks to pass before merging
-   ✅ Require branches to be up to date before merging
-   Status checks required:
-     - Lint (Python + TypeScript)
-     - Backend tests (Python 3.11)
-     - Frontend tests + build (Node 20)
-
-✅ Do not allow bypassing the above settings
-```
-
-With these rules:
-- No one (including you) can push directly to `main`
-- PRs can only merge when all three CI jobs are green
-- Stale approvals are dismissed when you push new commits to a PR
-
-**3. Connect Codecov** (optional but recommended):
-1. Go to [codecov.io](https://codecov.io) and sign in with GitHub
-2. Add your repository
-3. Copy the upload token to the `CODECOV_TOKEN` secret above
-4. Codecov will comment on PRs showing coverage changes per-line
+All three must be green to merge.
 
 ---
 
-## First PR workflow
-
-Practice the full team workflow on your first feature:
+## Environment Variables
 
 ```bash
-# 1. Create a feature branch (never commit directly to main)
-git checkout -b feature/add-document-list-endpoint
+# Required
+OPENAI_API_KEY=sk-...
 
-# 2. Make your change, then run checks locally
-cd backend
-ruff check app/ tests/    # must pass
-ruff format app/ tests/   # auto-fix formatting
-make test                 # must be 30/30
+# Postgres (defaults match docker-compose.yml)
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5434
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=password
+POSTGRES_DB=ai_decision_db
 
-# 3. Commit and push
-git add -p                # stage hunks interactively (avoid accidental secrets)
-git commit -m "feat: add GET /documents endpoint to list ingested PDFs"
-git push -u origin feature/add-document-list-endpoint
-
-# 4. Open a PR on GitHub
-# The PR template auto-fills — answer the four sections
-# GitHub Actions kicks off automatically
-
-# 5. Watch CI run at: github.com/<you>/ai-decision-platform/actions
-# Green on all three jobs → ready for review → merge
+# Qdrant (defaults match docker-compose.yml)
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+QDRANT_COLLECTION=documents
 ```
+
+Copy `.env.example` to `.env` and fill in `OPENAI_API_KEY`. Everything else works with defaults if you use `docker compose up -d`.

@@ -1,19 +1,20 @@
-function App() {
+import { Navigate, Route, Routes } from "react-router-dom";
+import { Layout } from "./components/Layout";
+import { ChatPage } from "./pages/ChatPage";
+import { EvalPage } from "./pages/EvalPage";
+import { IngestPage } from "./pages/IngestPage";
+
+export default function App() {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center max-w-lg px-4">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">
-          AI Decision Intelligence Platform
-        </h1>
-        <p className="text-gray-500 text-lg">
-          Strategic business decisions powered by AI.
-        </p>
-        <p className="mt-6 text-sm text-gray-400">
-          Backend skeleton running — RAG pipeline coming next.
-        </p>
-      </div>
-    </div>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<Navigate to="/chat" replace />} />
+        <Route path="/ingest" element={<IngestPage />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/eval" element={<EvalPage />} />
+        {/* Catch-all → chat */}
+        <Route path="*" element={<Navigate to="/chat" replace />} />
+      </Route>
+    </Routes>
   );
 }
-
-export default App;

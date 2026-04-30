@@ -1,0 +1,62 @@
+[
+  {
+    "id": "t1",
+    "question": "What were Tesla's vehicle deliveries in the most recent period?",
+    "source_document": "tesla.pdf",
+    "expected_topics": ["vehicle", "deliveries", "units"]
+  },
+  {
+    "id": "t2",
+    "question": "What is Tesla's operating cash flow?",
+    "source_document": "tesla.pdf",
+    "expected_topics": ["operating", "cash flow", "billion"]
+  },
+  {
+    "id": "t3",
+    "question": "What is Tesla's free cash flow and net income?",
+    "source_document": "tesla.pdf",
+    "expected_topics": ["free cash flow", "net income"]
+  },
+  {
+    "id": "t4",
+    "question": "What quantum computing hardware platforms are used in the CFD simulations?",
+    "source_document": "cfd on qc.pdf",
+    "expected_topics": ["IBM", "quantum", "hardware", "qubits"]
+  },
+  {
+    "id": "t5",
+    "question": "How do qubit count and circuit depth affect the quantum CFD simulation?",
+    "source_document": "cfd on qc.pdf",
+    "expected_topics": ["circuit depth", "qubits", "simulation"]
+  },
+  {
+    "id": "t6",
+    "question": "What aviation problem is being solved with quantum computing in the CFD paper?",
+    "source_document": "cfd on qc.pdf",
+    "expected_topics": ["aviation", "CFD", "quantum", "simulation"]
+  },
+  {
+    "id": "t7",
+    "question": "What numerical method is used to simulate the free-surface wave propagation?",
+    "source_document": "CFD_Simulations_of_the_Propagation_of_Free-Surface.pdf",
+    "expected_topics": ["numerical", "method", "simulation", "CFD"]
+  },
+  {
+    "id": "t8",
+    "question": "What does the vorticity analysis reveal in the water phase simulation?",
+    "source_document": "CFD_Simulations_of_the_Propagation_of_Free-Surface.pdf",
+    "expected_topics": ["vorticity", "water", "phase"]
+  },
+  {
+    "id": "t9",
+    "question": "What physical phenomenon is being modeled and what are the key simulation parameters?",
+    "source_document": "CFD_Simulations_of_the_Propagation_of_Free-Surface.pdf",
+    "expected_topics": ["free-surface", "wave", "parameters"]
+  },
+  {
+    "id": "t10",
+    "question": "How do the computational approaches differ between the two CFD papers?",
+    "source_document": "all",
+    "expected_topics": ["classical", "quantum", "CFD", "method"]
+  }
+]

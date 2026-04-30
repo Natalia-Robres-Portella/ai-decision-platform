@@ -37,7 +37,7 @@ logger = structlog.get_logger()
 #   Very technical / precise domain (legal, medical) → raise to 0.70+
 #   Conversational / news content → can lower to 0.50
 # ---------------------------------------------------------------------------
-DEFAULT_SCORE_THRESHOLD = 0.6
+DEFAULT_SCORE_THRESHOLD = 0.45
 
 
 # ---------------------------------------------------------------------------

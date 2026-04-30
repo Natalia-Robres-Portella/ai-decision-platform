@@ -8,7 +8,7 @@ from qdrant_client.models import Distance, VectorParams
 
 # Import models so SQLAlchemy's metadata is aware of all tables before create_all
 import app.db.models  # noqa: F401
-from app.api.routes import health, ingestion, qa, retrieval
+from app.api.routes import eval, health, ingestion, qa, retrieval
 from app.config import settings
 from app.core.logging import setup_logging
 from app.db.base import Base
@@ -62,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(ingestion.router, prefix="/api/v1")
     app.include_router(retrieval.router, prefix="/api/v1")
     app.include_router(qa.router, prefix="/api/v1")
+    app.include_router(eval.router, prefix="/api/v1")
 
     return app
 

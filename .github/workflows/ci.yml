@@ -56,7 +56,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm ci --audit-level=high
         working-directory: frontend
 
       - name: ESLint
@@ -190,7 +190,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --audit-level=high
+        # --audit-level=high: only fail on high/critical vulnerabilities.
+        # Moderate severity dev-only issues (like esbuild's dev-server CORS
+        # quirk, GHSA-67mh-4wv8-2f99) don't represent real risk and shouldn't
+        # block deployments.
         working-directory: frontend
 
       - name: Run tests
