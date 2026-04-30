@@ -224,9 +224,7 @@ async def evaluate_relevance(question: str, chunk_texts: list[str]) -> Relevance
 # ── Metric 3: Completeness ────────────────────────────────────────────────────
 
 
-async def evaluate_completeness(
-    question: str, answer: str, context: str
-) -> CompletenessResult:
+async def evaluate_completeness(question: str, answer: str, context: str) -> CompletenessResult:
     """Rate how fully the answer addresses all aspects of the question (1–5)."""
     prompt = (
         "You are an answer quality evaluator.\n\n"
