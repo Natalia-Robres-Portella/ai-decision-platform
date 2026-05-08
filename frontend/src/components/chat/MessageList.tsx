@@ -144,9 +144,7 @@ function AssistantBubble({
               </div>
             )}
 
-            {!isStreaming && sources && sources.length > 0 && (
-              <SourcesSection sources={sources} />
-            )}
+            {!isStreaming && sources && sources.length > 0 && <SourcesSection sources={sources} />}
           </>
         )}
       </div>
@@ -215,7 +213,7 @@ export function MessageList({ messages, streaming }: MessageListProps) {
                 confidence={msg.confidence}
                 error={msg.error}
               />
-            ),
+            )
           )}
 
           {/* Live streaming turn */}

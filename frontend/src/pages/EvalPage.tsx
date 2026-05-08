@@ -38,7 +38,15 @@ function scoreBg(score: number, scale: "pct" | "1-5"): string {
 
 // ── Score pill ────────────────────────────────────────────────────────────────
 
-function ScorePill({ value, label, scale }: { value: number; label: string; scale: "pct" | "1-5" }) {
+function ScorePill({
+  value,
+  label,
+  scale,
+}: {
+  value: number;
+  label: string;
+  scale: "pct" | "1-5";
+}) {
   return (
     <span
       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${scoreBg(value, scale)}`}
@@ -52,8 +60,7 @@ function ScorePill({ value, label, scale }: { value: number; label: string; scal
 
 function MiniBar({ value, scale }: { value: number; scale: "pct" | "1-5" }) {
   const norm = scale === "pct" ? value : (value - 1) / 4;
-  const color =
-    norm >= 0.8 ? "bg-emerald-500" : norm >= 0.6 ? "bg-amber-400" : "bg-red-400";
+  const color = norm >= 0.8 ? "bg-emerald-500" : norm >= 0.6 ? "bg-amber-400" : "bg-red-400";
   return (
     <div className="flex items-center gap-1.5">
       <div className="h-1.5 w-16 overflow-hidden rounded-full bg-gray-100">
@@ -194,13 +201,17 @@ function ResultsTable({ results }: { results: EvalQuestionResult[] }) {
 
               {/* Expanded detail row */}
               {expanded === r.id && !r.error && (
-                <tr key={`${r.id}-detail`} className="border-b border-gray-100 bg-slate-50 last:border-0">
+                <tr
+                  key={`${r.id}-detail`}
+                  className="border-b border-gray-100 bg-slate-50 last:border-0"
+                >
                   <td colSpan={5} className="px-5 py-4">
                     <div className="grid grid-cols-2 gap-6 text-xs">
                       <div>
                         <p className="mb-1 font-semibold text-slate-500">Answer snippet</p>
                         <p className="leading-relaxed text-slate-600">
-                          {r.answer.slice(0, 300)}{r.answer.length > 300 ? "…" : ""}
+                          {r.answer.slice(0, 300)}
+                          {r.answer.length > 300 ? "…" : ""}
                         </p>
                       </div>
                       <div>
@@ -210,8 +221,8 @@ function ResultsTable({ results }: { results: EvalQuestionResult[] }) {
                         </p>
                         {r.faithfulness_total > 0 && (
                           <p className="mt-2 text-slate-400">
-                            Faithfulness: {r.faithfulness_supported}/{r.faithfulness_total} sentences
-                            grounded in sources
+                            Faithfulness: {r.faithfulness_supported}/{r.faithfulness_total}{" "}
+                            sentences grounded in sources
                           </p>
                         )}
                       </div>
@@ -283,8 +294,7 @@ export function EvalPage() {
     onSuccess: (data) => setReport(data),
   });
 
-  const errMsg =
-    error instanceof Error ? error.message : error ? "Evaluation failed." : null;
+  const errMsg = error instanceof Error ? error.message : error ? "Evaluation failed." : null;
 
   return (
     <div className="flex h-full flex-col">
@@ -302,11 +312,7 @@ export function EvalPage() {
             disabled={isPending}
             className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
           >
-            {isPending ? (
-              <Loader size={12} className="animate-spin" />
-            ) : (
-              <Play size={12} />
-            )}
+            {isPending ? <Loader size={12} className="animate-spin" /> : <Play size={12} />}
             Re-run
           </button>
         )}
@@ -365,7 +371,9 @@ export function EvalPage() {
                   <p className="mt-3 text-xs text-slate-400">
                     Retrieval: {report.avg_retrieval_latency_ms.toFixed(0)} ms avg
                   </p>
-                  <p className="text-xs text-slate-400">Total: {report.avg_total_latency_ms.toFixed(0)} ms avg</p>
+                  <p className="text-xs text-slate-400">
+                    Total: {report.avg_total_latency_ms.toFixed(0)} ms avg
+                  </p>
                 </div>
               </div>
             </div>

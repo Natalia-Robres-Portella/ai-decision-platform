@@ -60,11 +60,7 @@ export function MessageInput({ value, onChange, onSubmit, isDisabled }: Props) {
           aria-label="Send message"
           className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isDisabled ? (
-            <Loader size={16} className="animate-spin" />
-          ) : (
-            <ArrowRight size={16} />
-          )}
+          {isDisabled ? <Loader size={16} className="animate-spin" /> : <ArrowRight size={16} />}
         </button>
       </div>
     </div>

@@ -7,7 +7,13 @@
 // - Better error objects: AxiosError carries response body, status, headers
 
 import axios from "axios";
-import type { AnswerResponse, Document, EvalReport, IngestResponse, QueryHistoryEntry } from "@/types";
+import type {
+  AnswerResponse,
+  Document,
+  EvalReport,
+  IngestResponse,
+  QueryHistoryEntry,
+} from "@/types";
 
 const api = axios.create({
   baseURL: "/api/v1",
@@ -27,7 +33,7 @@ export async function getDocuments(): Promise<Document[]> {
 // show a "Processing…" state once percent hits 100.
 export async function ingestDocument(
   file: File,
-  onUploadProgress?: (percent: number) => void,
+  onUploadProgress?: (percent: number) => void
 ): Promise<IngestResponse> {
   const form = new FormData();
   form.append("file", file);
@@ -47,7 +53,7 @@ export async function ingestDocument(
 
 export async function askQuestion(
   question: string,
-  documentIds?: string[],
+  documentIds?: string[]
 ): Promise<AnswerResponse> {
   const res = await api.post<AnswerResponse>("/ask", {
     question,

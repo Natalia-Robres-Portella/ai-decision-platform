@@ -18,26 +18,19 @@ export function SourceCard({ source, rank }: Props) {
             {rank}
           </span>
           <FileText size={13} className="flex-shrink-0 text-slate-400" />
-          <span className="truncate text-xs font-medium text-slate-700">
-            {source.filename}
-          </span>
+          <span className="truncate text-xs font-medium text-slate-700">{source.filename}</span>
         </div>
         {/* Relevance score bar */}
         <div className="flex flex-shrink-0 items-center gap-1.5">
           <div className="h-1.5 w-16 overflow-hidden rounded-full bg-gray-100">
-            <div
-              className="h-full rounded-full bg-blue-500"
-              style={{ width: `${score}%` }}
-            />
+            <div className="h-full rounded-full bg-blue-500" style={{ width: `${score}%` }} />
           </div>
           <span className="text-[11px] tabular-nums text-slate-400">{score}%</span>
         </div>
       </div>
 
       {/* Page */}
-      <p className="mt-1.5 pl-9 text-[11px] text-slate-400">
-        Page {source.page_number}
-      </p>
+      <p className="mt-1.5 pl-9 text-[11px] text-slate-400">Page {source.page_number}</p>
 
       {/* Excerpt */}
       <p className="mt-2 pl-9 text-xs leading-relaxed text-slate-600 line-clamp-3">

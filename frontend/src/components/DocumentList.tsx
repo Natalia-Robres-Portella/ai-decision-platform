@@ -23,10 +23,7 @@ function formatRelativeTime(iso: string): string {
   const diffMs = new Date(iso).getTime() - Date.now();
   const diffMin = Math.round(diffMs / 60_000);
   // Intl.RelativeTimeFormat gives us "2 minutes ago", "just now", etc.
-  return new Intl.RelativeTimeFormat("en", { numeric: "auto" }).format(
-    diffMin,
-    "minute",
-  );
+  return new Intl.RelativeTimeFormat("en", { numeric: "auto" }).format(diffMin, "minute");
 }
 
 // ── Status badge ────────────────────────────────────────────────────────────
@@ -50,8 +47,7 @@ function StatusBadge({ status }: { status: string }) {
   const style =
     STATUS_STYLES[status as keyof typeof STATUS_STYLES] ??
     "bg-gray-100 text-gray-600 ring-gray-400/20";
-  const label =
-    STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status;
+  const label = STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status;
 
   return (
     <span
@@ -121,11 +117,7 @@ function DocumentRow({ doc }: { doc: Document }) {
           checked={isSelected}
           disabled={!isReady}
           onChange={() => toggleDocument(doc.id)}
-          title={
-            isReady
-              ? "Include in chat scope"
-              : "Document must be ready before filtering"
-          }
+          title={isReady ? "Include in chat scope" : "Document must be ready before filtering"}
           className="h-4 w-4 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-40"
         />
       </td>
@@ -133,14 +125,8 @@ function DocumentRow({ doc }: { doc: Document }) {
       {/* Filename */}
       <td className="py-3.5 pr-4">
         <div className="flex items-center gap-2">
-          <FileText
-            size={14}
-            className="flex-shrink-0 text-slate-400"
-          />
-          <span
-            className="text-sm text-slate-800"
-            title={doc.filename}
-          >
+          <FileText size={14} className="flex-shrink-0 text-slate-400" />
+          <span className="text-sm text-slate-800" title={doc.filename}>
             {truncateFilename(doc.filename)}
           </span>
         </div>
@@ -170,12 +156,8 @@ function EmptyState() {
   return (
     <div className="rounded-lg border border-dashed border-gray-200 py-14 text-center">
       <FileText size={22} className="mx-auto text-slate-300" />
-      <p className="mt-3 text-sm font-medium text-slate-500">
-        No documents ingested yet
-      </p>
-      <p className="mt-1 text-xs text-slate-400">
-        Upload your first PDF above to get started.
-      </p>
+      <p className="mt-3 text-sm font-medium text-slate-500">No documents ingested yet</p>
+      <p className="mt-1 text-xs text-slate-400">Upload your first PDF above to get started.</p>
     </div>
   );
 }
@@ -190,9 +172,7 @@ export function DocumentList() {
     // React Query stops the interval the moment refetchInterval returns false.
     // Achieving this with useState + setInterval would require manual cleanup.
     refetchInterval: (query) => {
-      const hasProcessing = query.state.data?.some(
-        (d) => d.status === "processing",
-      );
+      const hasProcessing = query.state.data?.some((d) => d.status === "processing");
       return hasProcessing ? 3000 : false;
     },
   });
@@ -213,9 +193,7 @@ export function DocumentList() {
             </span>
           )}
           {!isLoading && documents.length > 0 && (
-            <span className="text-xs text-slate-400">
-              {documents.length} total
-            </span>
+            <span className="text-xs text-slate-400">{documents.length} total</span>
           )}
         </div>
       </div>
@@ -247,16 +225,14 @@ export function DocumentList() {
             <tbody>
               {isLoading
                 ? [0, 1, 2].map((i) => <SkeletonRow key={i} seed={i} />)
-                : documents.map((doc) => (
-                    <DocumentRow key={doc.id} doc={doc} />
-                  ))}
+                : documents.map((doc) => <DocumentRow key={doc.id} doc={doc} />)}
             </tbody>
           </table>
 
           {!isLoading && documents.length > 0 && (
             <p className="border-t border-gray-100 px-4 py-2.5 text-xs text-slate-400">
-              Check documents to scope chat queries to specific files. Only
-              ready documents can be selected.
+              Check documents to scope chat queries to specific files. Only ready documents can be
+              selected.
             </p>
           )}
         </div>

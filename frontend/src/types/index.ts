@@ -84,13 +84,13 @@ export interface EvalQuestionResult {
   id: string;
   question: string;
   answer: string;
-  faithfulness: number;        // 0–1
+  faithfulness: number; // 0–1
   faithfulness_supported: number;
   faithfulness_total: number;
-  relevance: number;           // 0–1 normalised
-  relevance_raw: number;       // 1–5
-  completeness: number;        // 0–1 normalised
-  completeness_raw: number;    // 1–5
+  relevance: number; // 0–1 normalised
+  relevance_raw: number; // 1–5
+  completeness: number; // 0–1 normalised
+  completeness_raw: number; // 1–5
   completeness_explanation: string;
   retrieval_latency_ms: number;
   total_latency_ms: number;

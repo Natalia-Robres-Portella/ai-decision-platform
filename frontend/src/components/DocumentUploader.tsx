@@ -14,14 +14,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertCircle,
-  CheckCircle,
-  FileText,
-  Loader,
-  Upload,
-  X,
-} from "lucide-react";
+import { AlertCircle, CheckCircle, FileText, Loader, Upload, X } from "lucide-react";
 import { ingestDocument } from "@/services/api";
 import type { IngestResponse } from "@/types";
 
@@ -66,7 +59,7 @@ function DropZone({ onFile }: DropZoneProps) {
     (file: File | undefined) => {
       if (file) onFile(file);
     },
-    [onFile],
+    [onFile]
   );
 
   return (
@@ -139,9 +132,7 @@ function FilePreview({ file, onClear, onUpload, validationError }: PreviewProps)
           <FileText size={18} className="text-slate-500" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-slate-800">
-            {truncateFilename(file.name)}
-          </p>
+          <p className="text-sm font-medium text-slate-800">{truncateFilename(file.name)}</p>
           <p className="mt-0.5 text-xs text-slate-400">{formatSize(file.size)}</p>
         </div>
         <button
@@ -189,9 +180,7 @@ function UploadProgress({ filename, percent }: { filename: string; percent: numb
         <div className="flex-1">
           <p className="text-sm font-medium text-slate-700">{truncateFilename(filename)}</p>
           <p className="mt-0.5 text-xs text-slate-400">
-            {isServerProcessing
-              ? "Processing chunks and embeddings…"
-              : `Uploading… ${percent}%`}
+            {isServerProcessing ? "Processing chunks and embeddings…" : `Uploading… ${percent}%`}
           </p>
         </div>
       </div>
@@ -209,9 +198,7 @@ function UploadProgress({ filename, percent }: { filename: string; percent: numb
         </div>
         <div className="mt-1.5 flex justify-between text-[11px] text-slate-400">
           <span>{isServerProcessing ? "Chunking + embedding" : "Uploading"}</span>
-          {!isServerProcessing && (
-            <span className="tabular-nums">{percent}%</span>
-          )}
+          {!isServerProcessing && <span className="tabular-nums">{percent}%</span>}
         </div>
       </div>
     </div>
@@ -220,13 +207,7 @@ function UploadProgress({ filename, percent }: { filename: string; percent: numb
 
 // ── Success state ───────────────────────────────────────────────────────────
 
-function SuccessPanel({
-  result,
-  onReset,
-}: {
-  result: IngestResponse;
-  onReset: () => void;
-}) {
+function SuccessPanel({ result, onReset }: { result: IngestResponse; onReset: () => void }) {
   return (
     <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
       <div className="flex items-start gap-3">
@@ -292,11 +273,14 @@ export function DocumentUploader() {
     },
   });
 
-  const handleFileChosen = useCallback((file: File) => {
-    setValidationError(validate(file));
-    setPendingFile(file);
-    mutation.reset();
-  }, [mutation]);
+  const handleFileChosen = useCallback(
+    (file: File) => {
+      setValidationError(validate(file));
+      setPendingFile(file);
+      mutation.reset();
+    },
+    [mutation]
+  );
 
   const handleUpload = useCallback(() => {
     if (!pendingFile) return;
@@ -319,9 +303,7 @@ export function DocumentUploader() {
   // ERROR
   if (mutation.isError) {
     const message =
-      mutation.error instanceof Error
-        ? mutation.error.message
-        : "An unexpected error occurred.";
+      mutation.error instanceof Error ? mutation.error.message : "An unexpected error occurred.";
     return <ErrorPanel message={message} onReset={handleReset} />;
   }
 
