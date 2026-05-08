@@ -60,9 +60,13 @@ export function useStreamAnswer() {
       const decoder = new TextDecoder();
       let buffer = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      let streamDone = false;
+      while (!streamDone) {
+        const { done: readerDone, value } = await reader.read();
+        if (readerDone) {
+          streamDone = true;
+          break;
+        }
 
         // Append decoded chunk to buffer, then split on newlines.
         // A chunk may arrive mid-line, so we keep the last incomplete

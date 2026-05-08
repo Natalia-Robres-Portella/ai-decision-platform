@@ -63,7 +63,7 @@ function SourcesSection({ sources }: { sources: SourceReference[] }) {
               </div>
               {src.excerpt && (
                 <p className="mt-1.5 line-clamp-3 leading-relaxed text-slate-500">
-                  "{src.excerpt}"
+                  &quot;{src.excerpt}&quot;
                 </p>
               )}
             </div>
