@@ -66,7 +66,7 @@ async def test_answer_includes_sources_from_retrieved_chunks(db_session):
     with (
         patch(
             "app.services.qa_service.retrieve_relevant_chunks",
-            return_value=(chunks, None),
+            return_value=(chunks, None, False),
         ),
         patch("app.services.qa_service.AsyncOpenAI") as mock_openai_cls,
     ):
@@ -94,7 +94,7 @@ async def test_confidence_high_when_top_score_exceeds_0_80(db_session):
     with (
         patch(
             "app.services.qa_service.retrieve_relevant_chunks",
-            return_value=(chunks, None),
+            return_value=(chunks, None, False),
         ),
         patch("app.services.qa_service.AsyncOpenAI") as mock_openai_cls,
     ):
@@ -113,7 +113,7 @@ async def test_llm_not_called_when_no_chunks_returned(db_session):
     with (
         patch(
             "app.services.qa_service.retrieve_relevant_chunks",
-            return_value=([], "no content found"),
+            return_value=([], "no content found", False),
         ),
         patch("app.services.qa_service.AsyncOpenAI") as mock_openai_cls,
     ):
@@ -139,7 +139,7 @@ async def test_token_count_from_completion_is_passed_through(db_session):
     with (
         patch(
             "app.services.qa_service.retrieve_relevant_chunks",
-            return_value=(chunks, None),
+            return_value=(chunks, None, False),
         ),
         patch("app.services.qa_service.AsyncOpenAI") as mock_openai_cls,
     ):
@@ -160,7 +160,7 @@ async def test_answer_uses_document_ids_filter_when_provided(db_session):
 
     with (
         patch(
-            "app.services.qa_service.retrieve_with_filter", return_value=(chunks, None)
+            "app.services.qa_service.retrieve_with_filter", return_value=(chunks, None, False)
         ) as mock_filter,
         patch("app.services.qa_service.retrieve_relevant_chunks") as mock_global,
         patch("app.services.qa_service.AsyncOpenAI") as mock_openai_cls,

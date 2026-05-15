@@ -77,7 +77,7 @@ async def test_top_k_forwarded_to_qdrant():
     patch_openai, patch_qdrant, mock_qdrant = _patch_retrieval(points)
 
     with patch_openai, patch_qdrant:
-        chunks, _ = await retrieve_relevant_chunks("What is revenue?", top_k=3)
+        chunks, _, _ = await retrieve_relevant_chunks("What is revenue?", top_k=3)
 
     call_kwargs = mock_qdrant.query_points.call_args.kwargs
     assert call_kwargs["limit"] == 3
@@ -85,18 +85,24 @@ async def test_top_k_forwarded_to_qdrant():
 
 @pytest.mark.asyncio
 async def test_score_threshold_filters_low_scoring_results():
-    """Results below the threshold must be excluded and a warning returned."""
-    low_score_point = make_qdrant_point(score=0.40)
+    """Results below the fallback floor must be excluded and a warning returned.
+
+    Score 0.20 is below FALLBACK_SCORE_THRESHOLD (0.25), so no chunks are
+    returned. Score 0.40 would fall in the fallback zone (0.25–0.45) and IS
+    returned with is_low_confidence=True — that behaviour is tested separately.
+    """
+    low_score_point = make_qdrant_point(score=0.20)
     patch_openai, patch_qdrant, _ = _patch_retrieval([low_score_point])
 
     with patch_openai, patch_qdrant:
-        chunks, warning = await retrieve_relevant_chunks(
+        chunks, warning, is_low_confidence = await retrieve_relevant_chunks(
             "What is revenue?", score_threshold=DEFAULT_SCORE_THRESHOLD
         )
 
     assert chunks == []
     assert warning is not None
-    assert "0.400" in warning  # top score appears in the warning message
+    assert "0.200" in warning  # top score appears in the warning message
+    assert is_low_confidence is False
 
 
 @pytest.mark.asyncio
@@ -106,12 +112,13 @@ async def test_high_scoring_results_returned_as_chunks():
     patch_openai, patch_qdrant, _ = _patch_retrieval([high_score_point])
 
     with patch_openai, patch_qdrant:
-        chunks, warning = await retrieve_relevant_chunks("What is revenue?")
+        chunks, warning, is_low_confidence = await retrieve_relevant_chunks("What is revenue?")
 
     assert len(chunks) == 1
     assert chunks[0].score == 0.85
     assert chunks[0].text == "Revenue was $25B."
     assert warning is None
+    assert is_low_confidence is False
 
 
 @pytest.mark.asyncio
@@ -121,7 +128,7 @@ async def test_document_ids_filter_passed_to_qdrant():
     patch_openai, patch_qdrant, mock_qdrant = _patch_retrieval(points)
 
     with patch_openai, patch_qdrant:
-        chunks, _ = await retrieve_with_filter("What is revenue?", document_ids=["doc-xyz"])
+        chunks, _, _ = await retrieve_with_filter("What is revenue?", document_ids=["doc-xyz"])
 
     call_kwargs = mock_qdrant.query_points.call_args.kwargs
     query_filter = call_kwargs.get("query_filter")
@@ -135,7 +142,8 @@ async def test_empty_qdrant_results_return_warning():
     patch_openai, patch_qdrant, _ = _patch_retrieval([])
 
     with patch_openai, patch_qdrant:
-        chunks, warning = await retrieve_relevant_chunks("Any question")
+        chunks, warning, is_low_confidence = await retrieve_relevant_chunks("Any question")
 
     assert chunks == []
     assert warning is not None
+    assert is_low_confidence is False
