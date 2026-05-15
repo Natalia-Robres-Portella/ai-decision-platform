@@ -67,6 +67,14 @@ SYSTEM_PROMPT = (
     "Always cite sources in the format: (Source: {filename}, page {N})."
 )
 
+LOW_CONFIDENCE_SYSTEM_PROMPT = (
+    "You are a strategic business analyst assistant. "
+    "The context below is a weak semantic match for the question — it may only partially cover the topic. "
+    "Answer based on what IS in the context. "
+    "If the context is insufficient, say so explicitly and explain what information is missing. "
+    "Never invent data. Always cite sources in the format: (Source: {filename}, page {N})."
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -129,9 +137,9 @@ async def answer_question(
 ) -> AnswerResponse:
     # 1. Retrieve
     if document_ids:
-        chunks, warning = await retrieve_with_filter(question, top_k=5, document_ids=document_ids)
+        chunks, warning, is_low_confidence = await retrieve_with_filter(question, top_k=5, document_ids=document_ids)
     else:
-        chunks, warning = await retrieve_relevant_chunks(question, top_k=5)
+        chunks, warning, is_low_confidence = await retrieve_relevant_chunks(question, top_k=5)
 
     # 2. No context → graceful decline
     if not chunks:
@@ -147,8 +155,9 @@ async def answer_question(
             tokens_used=0,
         )
 
-    # 3. Build prompt
+    # 3. Build prompt — use a hedging system prompt for weak matches
     context = _build_context_block(chunks)
+    system_prompt = LOW_CONFIDENCE_SYSTEM_PROMPT if is_low_confidence else SYSTEM_PROMPT
     user_message = f"Context:\n\n{context}\n\nQuestion: {question}"
 
     # 4. Call LLM
@@ -157,7 +166,7 @@ async def answer_question(
         model=MODEL,
         temperature=0.2,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
         ],
     )
@@ -220,9 +229,9 @@ async def stream_answer_tokens(
     automatically on drop. WebSockets add bidirectional complexity we don't need.
     """
     if document_ids:
-        chunks, warning = await retrieve_with_filter(question, top_k=5, document_ids=document_ids)
+        chunks, warning, is_low_confidence = await retrieve_with_filter(question, top_k=5, document_ids=document_ids)
     else:
-        chunks, warning = await retrieve_relevant_chunks(question, top_k=5)
+        chunks, warning, is_low_confidence = await retrieve_relevant_chunks(question, top_k=5)
 
     if not chunks:
         yield f"data: {json.dumps({'type': 'error', 'content': warning or 'No relevant content found'})}\n\n"
@@ -231,6 +240,7 @@ async def stream_answer_tokens(
 
     context = _build_context_block(chunks)
     sources = _build_sources(chunks)
+    system_prompt = LOW_CONFIDENCE_SYSTEM_PROMPT if is_low_confidence else SYSTEM_PROMPT
     user_message = f"Context:\n\n{context}\n\nQuestion: {question}"
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -238,7 +248,7 @@ async def stream_answer_tokens(
         model=MODEL,
         temperature=0.2,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
         ],
         stream=True,

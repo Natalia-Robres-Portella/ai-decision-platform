@@ -18,26 +18,28 @@ from app.schemas.retrieval import RetrievedChunk
 logger = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
-# Why 0.6 as the default threshold?
+# Two-tier threshold system:
 #
 # Cosine similarity for text-embedding-3-small in practice:
-#   < 0.40  → essentially unrelated documents (different topic entirely)
-#   0.40–0.55 → weak topical overlap (same domain, different focus)
-#   0.55–0.70 → relevant content, possibly different phrasing  ← target zone
+#   < 0.25  → completely unrelated (different topic entirely) → reject
+#   0.25–0.45 → weak overlap → fallback zone: pass to LLM with caveat
+#   0.45–0.70 → relevant content (normal RAG zone)            ← target
 #   0.70–0.85 → highly relevant, similar phrasing
 #   > 0.85  → near-identical or paraphrased text
 #
-# 0.6 sits just above the noise floor for this model. It lets through content
-# that discusses the same topic in different words (the normal RAG case) while
-# rejecting chunks that merely share some vocabulary but are semantically off-topic.
+# DEFAULT_SCORE_THRESHOLD: chunks above this are "good" context.
+# FALLBACK_SCORE_THRESHOLD: if no good chunk found but best score is above
+#   this floor, return chunks anyway with is_low_confidence=True so the LLM
+#   knows to hedge. Prevents "No relevant content" on valid but weakly-matched
+#   queries (e.g. Spanish query vs. English document).
 #
 # How to tune:
-#   Answers feel hallucinated or off-topic → raise to 0.65–0.70
-#   Too many "No relevant content" on valid questions → lower to 0.50–0.55
-#   Very technical / precise domain (legal, medical) → raise to 0.70+
-#   Conversational / news content → can lower to 0.50
+#   Hallucinated answers → raise DEFAULT to 0.50–0.55
+#   Still too many "no content" → lower FALLBACK to 0.20
+#   Very technical domain → raise DEFAULT to 0.60+
 # ---------------------------------------------------------------------------
 DEFAULT_SCORE_THRESHOLD = 0.45
+FALLBACK_SCORE_THRESHOLD = 0.25
 
 
 # ---------------------------------------------------------------------------
@@ -81,10 +83,12 @@ async def retrieve_relevant_chunks(
     query: str,
     top_k: int = 5,
     score_threshold: float = DEFAULT_SCORE_THRESHOLD,
-) -> tuple[list[RetrievedChunk], str | None]:
+) -> tuple[list[RetrievedChunk], str | None, bool]:
     """Embed query and return the top_k most semantically similar chunks.
 
-    Returns (chunks, warning). warning is set when no chunk clears the threshold.
+    Returns (chunks, warning, is_low_confidence).
+    is_low_confidence=True when chunks were returned via the fallback tier
+    (score between FALLBACK_SCORE_THRESHOLD and score_threshold).
     """
     return await _retrieve(query, top_k, score_threshold, document_ids=None)
 
@@ -94,7 +98,7 @@ async def retrieve_with_filter(
     top_k: int = 5,
     document_ids: list[str] | None = None,
     score_threshold: float = DEFAULT_SCORE_THRESHOLD,
-) -> tuple[list[RetrievedChunk], str | None]:
+) -> tuple[list[RetrievedChunk], str | None, bool]:
     """Same as retrieve_relevant_chunks, scoped to specific document IDs."""
     return await _retrieve(query, top_k, score_threshold, document_ids=document_ids)
 
@@ -109,7 +113,7 @@ async def _retrieve(
     top_k: int,
     score_threshold: float,
     document_ids: list[str] | None,
-) -> tuple[list[RetrievedChunk], str | None]:
+) -> tuple[list[RetrievedChunk], str | None, bool]:
     start = time.perf_counter()
 
     query_vector = await _embed_query(query)
@@ -135,18 +139,40 @@ async def _retrieve(
     latency_ms = round((time.perf_counter() - start) * 1000, 2)
     top_score = results[0].score if results else 0.0
 
-    # --- Threshold check ---
-    # If the best match doesn't clear the bar, the document set simply doesn't
-    # contain content relevant to this query. Returning low-quality chunks would
-    # give the LLM misleading context and produce hallucinated answers.
+    # --- Two-tier threshold ---
+    # Tier 1 (score >= score_threshold): high-confidence match → normal answer.
+    # Tier 2 (FALLBACK_SCORE_THRESHOLD <= score < score_threshold): weak match
+    #   → return chunks but flag is_low_confidence=True so the LLM hedges.
+    # Below FALLBACK_SCORE_THRESHOLD: truly unrelated → reject with warning.
     warning: str | None = None
-    if not results or top_score < score_threshold:
+    is_low_confidence = False
+
+    if not results or top_score < FALLBACK_SCORE_THRESHOLD:
         warning = (
             f"No relevant content found (best score: {top_score:.3f}, "
             f"threshold: {score_threshold}). "
             "Try rephrasing your query or uploading documents on this topic."
         )
         chunks: list[RetrievedChunk] = []
+    elif top_score < score_threshold:
+        # Fallback tier: best match is weak but above the noise floor.
+        is_low_confidence = True
+        warning = (
+            f"Low-confidence match (best score: {top_score:.3f}). "
+            "Answer may not be fully grounded in the documents."
+        )
+        chunks = [
+            RetrievedChunk(
+                text=r.payload["text"],
+                score=round(r.score, 4),
+                document_id=r.payload["document_id"],
+                filename=r.payload["filename"],
+                page_number=r.payload["page_number"],
+                chunk_index=r.payload["chunk_index"],
+            )
+            for r in results
+            if r.score >= FALLBACK_SCORE_THRESHOLD
+        ]
     else:
         chunks = [
             RetrievedChunk(
@@ -158,7 +184,7 @@ async def _retrieve(
                 chunk_index=r.payload["chunk_index"],
             )
             for r in results
-            if r.score >= score_threshold  # drop trailing chunks below threshold
+            if r.score >= score_threshold
         ]
 
     logger.info(
@@ -167,8 +193,10 @@ async def _retrieve(
         num_results=len(chunks),
         top_score=round(top_score, 4),
         score_threshold=score_threshold,
+        fallback_threshold=FALLBACK_SCORE_THRESHOLD,
+        is_low_confidence=is_low_confidence,
         document_filter=document_ids,
         latency_ms=latency_ms,
     )
 
-    return chunks, warning
+    return chunks, warning, is_low_confidence
