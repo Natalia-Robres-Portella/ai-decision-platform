@@ -37,9 +37,9 @@ def test_chunk_max_size_never_exceeded():
     assert len(chunks) > 1, "long text should produce multiple chunks"
     for chunk in chunks:
         token_count = len(_TOKENIZER.encode(chunk))
-        assert (
-            token_count <= CHUNK_SIZE
-        ), f"chunk has {token_count} tokens, exceeds CHUNK_SIZE={CHUNK_SIZE}"
+        assert token_count <= CHUNK_SIZE, (
+            f"chunk has {token_count} tokens, exceeds CHUNK_SIZE={CHUNK_SIZE}"
+        )
 
 
 def test_chunk_overlap_tokens_shared_between_consecutive_chunks():

@@ -137,7 +137,9 @@ async def answer_question(
 ) -> AnswerResponse:
     # 1. Retrieve
     if document_ids:
-        chunks, warning, is_low_confidence = await retrieve_with_filter(question, top_k=5, document_ids=document_ids)
+        chunks, warning, is_low_confidence = await retrieve_with_filter(
+            question, top_k=5, document_ids=document_ids
+        )
     else:
         chunks, warning, is_low_confidence = await retrieve_relevant_chunks(question, top_k=5)
 
@@ -229,7 +231,9 @@ async def stream_answer_tokens(
     automatically on drop. WebSockets add bidirectional complexity we don't need.
     """
     if document_ids:
-        chunks, warning, is_low_confidence = await retrieve_with_filter(question, top_k=5, document_ids=document_ids)
+        chunks, warning, is_low_confidence = await retrieve_with_filter(
+            question, top_k=5, document_ids=document_ids
+        )
     else:
         chunks, warning, is_low_confidence = await retrieve_relevant_chunks(question, top_k=5)
 
